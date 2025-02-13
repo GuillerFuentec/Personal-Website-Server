@@ -16,7 +16,8 @@
       "type": "string"
     },
     "email": {
-      "type": "email"
+      "type": "email",
+      "unique": true
     }
   }
 }
