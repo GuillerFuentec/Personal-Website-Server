@@ -5,8 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
     ports:
-      - "1337:1337"
+      - "${PORT:-1337}:1337"
     environment:
       - NODE_ENV=production
       - PORT=1337
+      - HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:1337/_health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

@@ -1,37 +1,52 @@
-# Use the official Node.js 18 image as base
-FROM node:18-alpine
+# Use multi-stage build for optimization
+FROM node:20-alpine AS base
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Set working directory
+# Dependencies stage
+FROM base AS deps
+RUN pnpm install --frozen-lockfile --prod=false
+
+# Build stage
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV NODE_ENV=production
+RUN pnpm run build
+RUN pnpm prune --prod
+
+# Production stage
+FROM node:20-alpine AS production
 WORKDIR /app
 
-# Enable corepack for pnpm support
-RUN corepack enable
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
 
-# Copy package files first for better caching
-COPY package.json pnpm-lock.yaml ./
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S strapi -u 1001
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Copy built application
+COPY --from=build --chown=strapi:nodejs /app/dist ./dist
+COPY --from=build --chown=strapi:nodejs /app/build ./build
+COPY --from=build --chown=strapi:nodejs /app/node_modules ./node_modules
+COPY --from=build --chown=strapi:nodejs /app/package.json ./package.json
+COPY --from=build --chown=strapi:nodejs /app/public ./public
+COPY --from=build --chown=strapi:nodejs /app/config ./config
+COPY --from=build --chown=strapi:nodejs /app/database ./database
+COPY --from=build --chown=strapi:nodejs /app/src ./src
 
-# Copy the rest of the application
-COPY . .
-
-# Set NODE_ENV to production
-ENV NODE_ENV=production
-
-# Build the Strapi admin panel
-RUN pnpm run build
-
-# Expose the port that Strapi will run on
-EXPOSE 1337
-
-# Create a non-root user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S strapi -u 1001
-
-# Change ownership of the app directory to the strapi user
+# Set proper permissions
 RUN chown -R strapi:nodejs /app
+
 USER strapi
 
-# Start the application
-CMD ["pnpm", "start"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:1337/_health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+EXPOSE 1337
+
+# Use dumb-init for proper signal handling
+CMD ["dumb-init", "node", "./node_modules/@strapi/strapi/bin/strapi.js", "start"]
