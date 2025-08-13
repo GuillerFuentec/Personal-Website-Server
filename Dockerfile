@@ -1,24 +1,24 @@
-# Use multi-stage build for optimization
+# Multi-stage build optimized for Strapi + Sharp on Alpine
 FROM node:20-alpine AS base
-WORKDIR /app
 
-# Install necessary packages for native dependencies
+# Install system dependencies required for native modules
 RUN apk add --no-cache \
     python3 \
     make \
     g++ \
     vips-dev \
+    pkgconfig \
     libc6-compat
 
+WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
 # Dependencies stage
 FROM base AS deps
-RUN pnpm install --frozen-lockfile --prod=false
-
-# Rebuild sharp for Alpine Linux
-RUN pnpm rebuild sharp
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile
+# Force install sharp for Alpine Linux specifically
+RUN pnpm add sharp@latest --platform=linuxmusl --arch=x64
 
 # Build stage
 FROM base AS build
@@ -27,40 +27,26 @@ COPY . .
 ENV NODE_ENV=production
 RUN pnpm run build
 RUN pnpm prune --prod
-RUN pnpm rebuild sharp
 
 # Production stage
 FROM node:20-alpine AS production
+RUN apk add --no-cache dumb-init vips
+
 WORKDIR /app
 
-# Install runtime dependencies only
-RUN apk add --no-cache \
-    dumb-init \
-    vips
+# Create user
+RUN addgroup -g 1001 -S nodejs && adduser -S strapi -u 1001
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S strapi -u 1001
-
-# Copy built application
+# Copy application
 COPY --from=build --chown=strapi:nodejs /app/build ./build
 COPY --from=build --chown=strapi:nodejs /app/node_modules ./node_modules
-COPY --from=build --chown=strapi:nodejs /app/package.json ./package.json
-COPY --from=build --chown=strapi:nodejs /app/public ./public
+COPY --from=build --chown=strapi:nodejs /app/package.json ./
 COPY --from=build --chown=strapi:nodejs /app/config ./config
 COPY --from=build --chown=strapi:nodejs /app/database ./database
 COPY --from=build --chown=strapi:nodejs /app/src ./src
-
-# Set proper permissions
-RUN chown -R strapi:nodejs /app
+COPY --from=build --chown=strapi:nodejs /app/public ./public
 
 USER strapi
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:1337/_health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
-
 EXPOSE 1337
 
-# Use dumb-init for proper signal handling
-CMD ["dumb-init", "node", "./node_modules/@strapi/strapi/bin/strapi.js", "start"]
+CMD ["dumb-init", "node", "node_modules/@strapi/strapi/bin/strapi.js", "start"]
