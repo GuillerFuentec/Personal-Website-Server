@@ -1,14 +1,14 @@
-# Multi-stage build optimized for Strapi + Sharp on Alpine
-FROM node:20-alpine AS base
+# Use Debian-based Node instead of Alpine to avoid sharp issues
+FROM node:20-slim AS base
 
-# Install system dependencies required for native modules
-RUN apk add --no-cache \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    vips-dev \
-    pkgconfig \
-    libc6-compat
+    libvips-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 RUN corepack enable
@@ -17,8 +17,6 @@ RUN corepack enable
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
-# Force install sharp for Alpine Linux specifically
-RUN pnpm add sharp@latest --platform=linuxmusl --arch=x64
 
 # Build stage
 FROM base AS build
@@ -29,15 +27,20 @@ RUN pnpm run build
 RUN pnpm prune --prod
 
 # Production stage
-FROM node:20-alpine AS production
-RUN apk add --no-cache dumb-init vips
+FROM node:20-slim AS production
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libvips42 \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Create user
-RUN addgroup -g 1001 -S nodejs && adduser -S strapi -u 1001
+# Create non-root user
+RUN groupadd -g 1001 nodejs && useradd -r -u 1001 -g nodejs strapi
 
-# Copy application
+# Copy built application with correct ownership
 COPY --from=build --chown=strapi:nodejs /app/build ./build
 COPY --from=build --chown=strapi:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=strapi:nodejs /app/package.json ./
