@@ -1,12 +1,24 @@
 # Use multi-stage build for optimization
 FROM node:20-alpine AS base
 WORKDIR /app
+
+# Install necessary packages for native dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    vips-dev \
+    libc6-compat
+
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
 # Dependencies stage
 FROM base AS deps
 RUN pnpm install --frozen-lockfile --prod=false
+
+# Rebuild sharp for Alpine Linux
+RUN pnpm rebuild sharp
 
 # Build stage
 FROM base AS build
@@ -15,13 +27,16 @@ COPY . .
 ENV NODE_ENV=production
 RUN pnpm run build
 RUN pnpm prune --prod
+RUN pnpm rebuild sharp --prod
 
 # Production stage
 FROM node:20-alpine AS production
 WORKDIR /app
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install runtime dependencies only
+RUN apk add --no-cache \
+    dumb-init \
+    vips
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
