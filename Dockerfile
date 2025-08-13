@@ -2,7 +2,7 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
 # Dependencies stage
 FROM base AS deps
