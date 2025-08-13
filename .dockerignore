@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+npm-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+build
+dist
+.tmp
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Database
+*.db
+.tmp/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Coverage
+coverage
+
+# Cache
+.cache
+
+# Temporary files
+*.tmp
+*.temp
