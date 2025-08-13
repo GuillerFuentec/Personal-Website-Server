@@ -28,7 +28,6 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S strapi -u 1001
 
 # Copy built application
-COPY --from=build --chown=strapi:nodejs /app/dist ./dist
 COPY --from=build --chown=strapi:nodejs /app/build ./build
 COPY --from=build --chown=strapi:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=strapi:nodejs /app/package.json ./package.json
