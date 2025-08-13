@@ -27,7 +27,7 @@ COPY . .
 ENV NODE_ENV=production
 RUN pnpm run build
 RUN pnpm prune --prod
-RUN pnpm rebuild sharp --prod
+RUN pnpm rebuild sharp
 
 # Production stage
 FROM node:20-alpine AS production
