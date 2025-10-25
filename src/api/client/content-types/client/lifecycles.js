@@ -25,6 +25,14 @@ export default {
     const { result } = event;
     const { name = "Nuevo cliente", contact_info } = result;
     const { email, phone, message } = parseContactInfo(contact_info);
+    const adminPhone = process.env.ADMIN_PHONE_NUMBER;
+
+    if (!adminPhone) {
+      strapi.log.error(
+        "[client afterCreate] ADMIN_PHONE_NUMBER is not defined. Skipping notification dispatch."
+      );
+      return;
+    }
 
     const msgParts = [
       `Nuevo cliente registrado: ${name}`,
@@ -37,7 +45,7 @@ export default {
 
     await initializeNotificationAPI().send({
       type: "new_client",
-      to: { number: process.env.ADMIN_PHONE_NUMBER },
+      to: { number: adminPhone },
       sms: {
         message: msg,
       },
